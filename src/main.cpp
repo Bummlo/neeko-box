@@ -3,7 +3,7 @@
 #include "neeko-os.h"
 #include "framebuffer.h"
 
-// TEST S
+// TEST S3de
 
 TFT_eSPI tft = TFT_eSPI();
 
