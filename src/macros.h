@@ -5,9 +5,9 @@
 #define NKO_STR(x) NKO_STR_HELPER(x)
 
 #define NKO_ASSERT_DO(a, m, t) \
-    if(!(a)) { Serial.printf("%s@%d: " m "\n", __FILENAME__, __LINE__); t; }
+    if(!(a)) { Serial.println(m); t; }
 
-#define NKO_ASSERT(a, m) NKO_ASSERT_DO(a, m, )
+#define NKO_ASSERT(a, m) NKO_ASSERT_DO(a, m, while(1) {})
 
 #define NKO_ASSERT_RET(a, m) NKO_ASSERT_DO(a, m, return)
 
