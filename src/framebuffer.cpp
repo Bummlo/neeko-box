@@ -6,6 +6,12 @@ Framebuffer::Framebuffer(TFT_eSPI& tft)
     : m_Buffer1(nullptr), m_Buffer2(nullptr), m_Tft(tft)
 {}
 
+Framebuffer::~Framebuffer()
+{
+    delete[] m_Buffer1;
+    delete[] m_Buffer2; 
+}
+
 void Framebuffer::create()
 {
     size_t size = FB_WIDTH * (FB_HEIGHT / 2) * sizeof(uint16_t);
@@ -32,9 +38,7 @@ void Framebuffer::clear(uint16_t color)
 void Framebuffer::upload()
 {
     m_Tft.startWrite();
-    m_Tft.pushImageDMA(0, 0, 320, 120, m_Buffer1);
-    m_Tft.dmaWait();
-    m_Tft.pushImageDMA(0, 120, 320, 120, m_Buffer2);
+    m_Tft.pushImageDMA(0, 0, 320, 20, m_Buffer1);
     m_Tft.dmaWait();
     m_Tft.endWrite();
 }
@@ -119,5 +123,43 @@ void Framebuffer::draw_string(uint16_t x, uint16_t y, const char* str, uint16_t 
         draw_char(x, y, *str, color);
         x += 6;
         str++;
+    }
+}
+
+void Framebuffer::draw_sprite(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t* sprite)
+{
+    uint16_t sprite_end_x = x + w;
+    uint16_t sprite_end_y = y + h;
+
+    if(sprite_end_x >= FB_WIDTH)
+    {
+        sprite_end_x = FB_WIDTH;
+    }
+
+    if(sprite_end_y >= FB_HEIGHT)
+    {
+        sprite_end_y = FB_HEIGHT;
+    }
+
+    uint16_t new_w = sprite_end_x - x;
+    uint16_t new_h = sprite_end_y- y;
+
+    for(uint16_t sy = 0; sy < new_h; ++sy)
+    {
+        uint16_t* buffer;
+
+        if (y + sy < FB_HEIGHT / 2)
+        {
+            buffer = m_Buffer1 + x + (y + sy) * FB_WIDTH;
+        }
+        else
+        {
+            buffer = m_Buffer2 + x + (y + sy - FB_HEIGHT / 2) * FB_WIDTH;
+        }
+
+        for(uint16_t sx = 0; sx < new_w; ++sx)
+        {
+            buffer[sx] = sprite[sx + sy * w];
+        }
     }
 }

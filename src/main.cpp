@@ -1,97 +1,158 @@
+#include "main.h"
 #include <TFT_eSPI.h>
-#include <XPT2046_Touchscreen.h>
-#include "framebuffer.h"
-
-TFT_eSPI tft;
-XPT2046_Touchscreen ts(TOUCH_CS);
-Framebuffer framebuffer(tft);
+#include <WiFi.h>
+#include "bitmaps.h"
 
 void setup() 
 {
     Serial.begin(115200);
 
-    framebuffer.create();
+    pinMode(PIN_BUTTON_UP, INPUT_PULLUP);
+    pinMode(PIN_BUTTON_DOWN, INPUT_PULLUP);
+    pinMode(PIN_BUTTON_LEFT, INPUT_PULLUP);
+    pinMode(PIN_BUTTON_RIGHT, INPUT_PULLUP);
+    pinMode(PIN_BUTTON_A, INPUT_PULLUP);
+    pinMode(PIN_BUTTON_B, INPUT_PULLUP);
 
-    ts.begin();
-    ts.setRotation(3);
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    
+    Serial.print("Connecting to WiFi: ");
+    Serial.println(ssid);
+
+    uint8_t retries = 4;
+
+    while (WiFi.status() != WL_CONNECTED && retries) 
+    {
+        delay(500);
+        Serial.print(".");
+
+        --retries;
+    }
+    
+    if(WiFi.status() != WL_CONNECTED)
+    {
+        Serial.println("\nWiFi connected!");
+    }
+    else
+    {
+        Serial.println("\nFailed to connect to WiFi!");
+    }
 
     tft.init();
     tft.initDMA();
     tft.setRotation(3);
     tft.setSwapBytes(true);
-    tft.fillScreen(TFT_BLACK);
+    tft.setTextFont(1);
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_WHITE);
+
+    set_app(ApplicationType::DESKTOP);
+    create_desired_app(tft);
 }
 
-ulong lastTime = 0;
-int frameCount = 0;
-float fps = 0;
+void check_button_input()
+{
+    const uint8_t button_repeat_rate = 5;
 
-int shrink = 1;
-int size = 10;
+    static uint8_t button_pins[6] = 
+    { 
+        PIN_BUTTON_UP,
+        PIN_BUTTON_DOWN,
+        PIN_BUTTON_LEFT,
+        PIN_BUTTON_RIGHT,
+        PIN_BUTTON_A,
+        PIN_BUTTON_B
+    };
+
+    static bool previous_button_states[6] = { 0 };
+    static uint8_t button_down_count[6] = { 0 };
+
+    for (int i = 0; i < 6; i++)
+    {
+        bool current_state = digitalRead(button_pins[i]);
+        
+        if (current_state == LOW && previous_button_states[i] == HIGH)
+        {
+            get_app()->button_input((Button)i, ButtonAction::PRESSED);
+
+            button_down_count[i] = 1;
+        }
+        else if (current_state == LOW && previous_button_states[i] == LOW)
+        {
+            button_down_count[i]++;
+
+            if (button_down_count[i] >= button_repeat_rate)
+            {
+                get_app()->button_input((Button)i, ButtonAction::BUTTON_DOWN);
+                button_down_count[i] = 0;
+            }
+        }
+        else if (current_state == HIGH && previous_button_states[i] == LOW)
+        {
+            get_app()->button_input((Button)i, ButtonAction::RELEASED);
+
+            button_down_count[i] = 0;
+        }
+
+        previous_button_states[i] = current_state;
+    }
+}
+
+void check_touch_input()
+{
+    uint16_t x, y;
+
+    if(tft.getTouch(&x, &y))
+    {
+        x = tft.width() - x;
+
+        get_app()->touch_input(x, y);
+    }
+}
 
 void loop() 
 {
+    static ulong last_time = 0;
+    static int frameCount = 0;
+    static float fps = 0;
+    static ulong last_frame = millis();
+
     frameCount++;
 
-    for(uint16_t y = 0; y < FB_HEIGHT / 10; ++y)
+    if(get_app()->get_app_type() != get_desired_app())
     {
-        for(uint16_t x = 0; x < FB_WIDTH / 10; ++x)
+        create_desired_app(tft);
+    }
+
+    check_button_input();
+    check_touch_input();
+       
+    get_app()->update(fps);
+
+
+    if (millis() - last_time >= 1000) 
+    {
+        if(fps != frameCount)
         {
-            uint16_t color = 0;
+            fps = frameCount;
 
-            switch((x + y) % 5)
-            {
-                case 0: color = rgb(255, 24, 178); break;
-                case 1: color = TFT_RED; break;
-                case 2: color = TFT_BLUE; break;
-                case 3: color = TFT_GREEN; break;
-                case 4: color = TFT_PINK; break;
-            }
+            get_app()->slow_update(fps);
+        }
 
-            framebuffer.draw_rect(x * 10, y * 10, 10, 10, color);
-        } 
-    }  
-
-    framebuffer.draw_rect(5, 5, 60, 17, TFT_BLACK);
-    
-    framebuffer.draw_string(10, 10, "FPS: ", TFT_WHITE);
-
-    char buffer[10];
-    itoa(fps, buffer, 10);
-    
-    framebuffer.draw_string(50, 10, buffer, TFT_WHITE);
-
-    framebuffer.draw_rect(200, 150, size, size, TFT_ORANGE);
-    framebuffer.draw_rect(100, 150, size, size, TFT_RED);
-
-    size += shrink;
-    
-    if(size == 0 || size > 100) 
-    {
-        shrink *= -1;
-    }
-
-    framebuffer.upload();
-
-    if (millis() - lastTime >= 1000) 
-    {
-        fps = frameCount;
         frameCount = 0;
-
-        lastTime = millis();
+        last_time = millis();
     }
 
-    if (ts.touched()) 
+    ulong delta_time = millis() - last_frame;
+    long delay_time = 1000 / 30 - delta_time;
+
+    if(delay_time < 0)
     {
-        TS_Point p = ts.getPoint();
-
-        float x = map(p.x, 250, 3800, tft.width(), 0);
-        int y = map(p.y, 250, 3800, tft.height(), 0);
-
-        Serial.print("Touch detected at: X: ");
-        Serial.print(x);
-        Serial.print(", Y: ");
-        Serial.println(y);
-        tft.fillCircle(x, y, 2, TFT_RED);
+        delay_time = 0;
     }
+
+    delay(delay_time);
+
+    last_frame = millis();
 }

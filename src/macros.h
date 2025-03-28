@@ -15,3 +15,8 @@ typedef unsigned char byte;
 typedef unsigned short ushort;
 typedef unsigned int uint;
 typedef unsigned long ulong;
+
+constexpr uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) 
+{
+    return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+}

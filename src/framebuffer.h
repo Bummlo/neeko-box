@@ -13,6 +13,7 @@ private:
 
 public:
     Framebuffer(TFT_eSPI& tft);
+    ~Framebuffer();
 
     void create();
     void clear(uint16_t color);
@@ -22,9 +23,5 @@ public:
     void draw_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
     void draw_char(uint16_t x, uint16_t y, char c, uint16_t color);
     void draw_string(uint16_t x, uint16_t y, const char* str, uint16_t color);
+    void draw_sprite(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t* sprite);
 };
-
-constexpr uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) 
-{
-    return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
-}
